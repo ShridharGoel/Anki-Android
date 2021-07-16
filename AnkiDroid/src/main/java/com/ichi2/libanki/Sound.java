@@ -20,6 +20,8 @@ package com.ichi2.libanki;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Point;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaMetadataRetriever;
@@ -371,7 +373,11 @@ public class Sound {
                 mMediaPlayer.setOnErrorListener((mp, which, extra) -> errorHandler.onError(mp, which, extra, soundPath));
                 // Setup the MediaPlayer
                 mMediaPlayer.setDataSource(AnkiDroidApp.getInstance().getApplicationContext(), soundUri);
-                mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+                mMediaPlayer.setAudioAttributes(
+                        new AudioAttributes
+                                .Builder()
+                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                                .build());
                 mMediaPlayer.setOnPreparedListener(mp -> {
                     Timber.d("Starting media player");
                     mMediaPlayer.start();
@@ -381,8 +387,17 @@ public class Sound {
                 }
                 mMediaPlayer.prepareAsync();
                 Timber.d("Requesting audio focus");
-                mAudioManager.requestAudioFocus(afChangeListener, AudioManager.STREAM_MUSIC,
-                        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK);
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    AudioFocusRequest audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                            .setAcceptsDelayedFocusGain(true)
+                            .setWillPauseWhenDucked(true)
+                            .setOnAudioFocusChangeListener(afChangeListener)
+                            .build();
+                    mAudioManager.requestAudioFocus(audioFocusRequest);
+                } else {
+                    mAudioManager.requestAudioFocus(afChangeListener, AudioManager.STREAM_MUSIC,
+                            AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK);
+                }
             } catch (Exception e) {
                 Timber.e(e, "playSounds - Error reproducing sound %s", soundPath);
                 releaseSound();
